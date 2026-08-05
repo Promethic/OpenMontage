@@ -196,10 +196,9 @@ def _score_weak_intent(scenes: list[dict]) -> dict[str, Any]:
 
 def _score_typography(scenes: list[dict]) -> dict[str, Any]:
     """Score text-first overreliance."""
-    text_scenes = sum(
-        1 for s in scenes
-        if s.get("type") in ("text_card", "stat_card", "kpi_grid")
-    )
+    # `graphic_card` is the canonical type for every renderer-built composition —
+    # title cards, stat cards, KPI grids, comparisons, diagrams.
+    text_scenes = sum(1 for s in scenes if s.get("type") == "graphic_card")
     ratio = text_scenes / len(scenes)
 
     if ratio > 0.6:

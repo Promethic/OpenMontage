@@ -145,11 +145,11 @@ def sample_artifact(name: str) -> dict:
         }
     if name == "scene_plan":
         return {
-            "version": "1.0",
+            "version": "2.0",
             "scenes": [
                 {
                     "id": "scene-1",
-                    "type": "talking_head",
+                    "type": "generated_video",
                     "description": "Host on camera",
                     "start_seconds": 0,
                     "end_seconds": 10,

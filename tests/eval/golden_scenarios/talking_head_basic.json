@@ -21,11 +21,11 @@
       }
     },
     "scene_plan": {
-      "version": "1.0",
+      "version": "2.0",
       "required_fields": ["scenes"],
       "assertions": {
         "scenes_not_empty": true,
-        "all_scenes_are_talking_head": true
+        "all_scenes_are_generated_video": true
       }
     },
     "asset_manifest": {

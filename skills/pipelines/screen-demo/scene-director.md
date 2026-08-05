@@ -28,12 +28,15 @@ Use `frame_sampler` for exact reference frames around each key action and store 
 
 ### 2. Choose Scene Shapes
 
-Use simple scene types that match the schema:
+The schema accepts exactly four scene types, and each one says how the visible material is made:
 
-- `screen_recording` for live UI capture sections
-- `text_card` for step labels, title cards, or recap slides
-- `diagram` only when the UI alone cannot explain the concept
-- `transition` sparingly between major workflow phases
+- `genesio_capture` for live Genesio UI capture sections
+- `graphic_card` for step labels, title cards, recap slides, and diagrams the UI alone cannot explain
+- `image_scene` when one still frame or screenshot carries the moment
+- `generated_video` for a generated clip, if the pipeline plans one at all
+
+There is no `transition` scene type. Move between workflow phases with `transition_in` and
+`transition_out` on the adjacent scenes.
 
 ### 3. Plan Crop Strategy In Metadata
 

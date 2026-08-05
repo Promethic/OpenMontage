@@ -234,11 +234,11 @@ For this pipeline, put documentary-montage-specific fields inside
 
 ```json
 {
-  "version": "1.0",
+  "version": "2.0",
   "scenes": [
     {
       "id": "slot_01",
-      "type": "broll",
+      "type": "generated_video",
       "description": "a single raindrop hitting dry asphalt, close up, slow motion, warm streetlamp glow",
       "start_seconds": 0.0,
       "end_seconds": 3.5,

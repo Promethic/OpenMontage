@@ -308,7 +308,7 @@ When the Scene Director identifies a data visualization need, apply this skill a
 ```json
 {
   "id": "scene-7",
-  "type": "animation",
+  "type": "graphic_card",
   "description": "Horizontal bar chart comparing response times: Traditional DB 450ms, Vector DB 12ms, Cached 3ms. Bars grow left-to-right with stagger. Vector DB bar highlighted in accent color. Hold for readability.",
   "start_seconds": 32,
   "end_seconds": 40,

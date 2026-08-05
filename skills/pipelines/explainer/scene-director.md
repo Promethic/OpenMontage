@@ -43,7 +43,7 @@ Transform each script section into 1-3 visual scenes. Each scene is a distinct v
 ```json
 {
   "id": "scene-3",
-  "type": "diagram",
+  "type": "graphic_card",
   "description": "Mermaid flowchart showing query → encode → vector search → rank → return results. Nodes appear one by one as narrator describes each step.",
   "start_seconds": 15,
   "end_seconds": 22,
@@ -65,26 +65,40 @@ Transform each script section into 1-3 visual scenes. Each scene is a distinct v
 
 #### Scene Types and When to Use Them
 
+`scenes[].type` has exactly four values, and each says how the visible material is made:
+
 | Type | Best For | Available Tools | Duration Guidance |
 |------|----------|-----------------|-------------------|
-| `hero_title` | Opening titles, dramatic reveals | Remotion HeroTitle (theme-driven title treatment) | 3-5s |
-| `stat_card` | Big dramatic numbers, impactful metrics | Remotion StatCard (large stat + subtitle) | 4-6s |
-| `bar_chart` | Category comparisons, rankings | Remotion BarChart (animated grow-up/slide-in/pop) | 5-7s |
-| `line_chart` | Trends, time series, growth curves | Remotion LineChart (draw/fade animation, multi-series) | 5-7s |
-| `pie_chart` | Proportions, breakdowns, distributions | Remotion PieChart (donut mode, center label, spin/expand) | 5-7s |
-| `kpi_grid` | Dashboards, traction metrics, at-a-glance data | Remotion KPIGrid (2-4 columns, count-up/pop/cascade) | 5-7s |
-| `comparison` | Before/after, A/B, versus comparisons | Remotion ComparisonCard (dual-value with divider) | 4-6s |
-| `callout` | Expert quotes, tips, warnings, important notes | Remotion CalloutBox (info/warning/tip/quote types) | 4-6s |
-| `progress_bar` | Journey visualization, completion, stacked metrics | Remotion ProgressBar (fill/pulse/step animations) | 4-6s |
-| `text_card` | Statements, closing messages, key terms | Remotion TextCard (centered, spring animation) | 3-5s |
-| `animation` | Concepts needing motion (data flow, math) | Remotion, Manim | 4-10s |
-| `diagram` | Processes, architecture, relationships | `diagram_gen` (Mermaid), `image_selector` | 4-8s |
-| `generated` | Illustrations, metaphors, real-world imagery | `image_selector` (FLUX/GPT Image) | 3-6s |
-| `talking_head` | AI avatar speaking (if HeyGen available) | HeyGen tools | 5-15s |
-| `broll` | Context, real-world examples | Stock or generated footage | 3-6s |
-| `screen_recording` | Code demos, UI walkthroughs | Recorded or simulated | 5-15s |
+| `graphic_card` | Titles, numbers, comparisons, callouts, diagrams, simple data visualizations | Remotion components, `diagram_gen` (Mermaid) | 3-8s |
+| `image_scene` | Illustrations, metaphors, real-world imagery carried by one still | `image_selector` (FLUX/GPT Image) | 3-6s |
+| `generated_video` | Moving imagery — concepts needing motion, avatars, contextual footage | Remotion, Manim, HeyGen, stock or generated footage | 4-15s |
+| `genesio_capture` | Recordings of the Genesio application | Genesio capture | 5-15s |
 
-**Zero-key scene selection:** When no image/video generation is available, prefer `hero_title`, `stat_card`, `bar_chart`, `line_chart`, `pie_chart`, `kpi_grid`, `comparison`, `callout`, `progress_bar`, and `text_card`. These render entirely from Remotion components with zero external dependencies and can still feel distinct if you derive color, typography, and pacing from the subject instead of defaulting to a generic dashboard aesthetic.
+Never invent a fifth value, and never leave `type` empty.
+
+#### Choosing the Remotion component for a `graphic_card`
+
+The component is a renderer detail, not a scene type. Name it in `scene_plan.metadata.remotion_components`
+keyed by scene id, and keep `scenes[].type` at `graphic_card`:
+
+| Component | Best For | Duration Guidance |
+|-----------|----------|-------------------|
+| `hero_title` | Opening titles, dramatic reveals | 3-5s |
+| `stat_card` | Big dramatic numbers, impactful metrics | 4-6s |
+| `bar_chart` | Category comparisons, rankings | 5-7s |
+| `line_chart` | Trends, time series, growth curves | 5-7s |
+| `pie_chart` | Proportions, breakdowns, distributions | 5-7s |
+| `kpi_grid` | Dashboards, traction metrics, at-a-glance data | 5-7s |
+| `comparison` | Before/after, A/B, versus comparisons | 4-6s |
+| `callout` | Expert quotes, tips, warnings, important notes | 4-6s |
+| `progress_bar` | Journey visualization, completion, stacked metrics | 4-6s |
+| `text_card` | Statements, closing messages, key terms | 3-5s |
+| `diagram` | Processes, architecture, relationships | 4-8s |
+
+**Zero-key scene selection:** When no image/video generation is available, lean on `graphic_card`
+scenes. They render entirely from Remotion components with zero external dependencies and can still
+feel distinct if you derive color, typography, and pacing from the subject instead of defaulting to a
+generic dashboard aesthetic.
 
 ### Step 4: Apply the Visual Technique Library
 

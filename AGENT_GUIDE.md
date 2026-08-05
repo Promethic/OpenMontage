@@ -566,6 +566,30 @@ Stage contract rules:
 - Non-canonical outputs such as media files belong in stage-specific directories.
 - Tools should record seeds/model versions for reproducibility.
 
+### Canonical scene types
+
+`scene_plan` is version `2.0`, and every `scenes[].type` is one of exactly four values. The
+type answers one question: **how is the scene's visible material made?**
+
+| Type | Use when |
+|------|----------|
+| `genesio_capture` | The visible material is a screen recording of the Genesio application. Content shown inside Genesio, including a person speaking, stays a Genesio capture. |
+| `generated_video` | The scene is a standalone generated video clip — formerly talking-head, character, B-roll, and animated-video concepts. Choosing it does not select or authorize a provider. |
+| `image_scene` | One still image is the main visible material. Pan, zoom, or crop does not turn it into generated video. |
+| `graphic_card` | The renderer builds the composition from text and simple graphic elements: titles, CTAs, numbers, comparisons, diagrams, simple data visualizations. |
+
+Choose one of the four. Never invent a fifth value, and never leave the field empty.
+
+The type does not encode narrative purpose, asset provenance, capture dimensions, or delivery
+aspect ratio. Those live in `narrative_role`, `transition_in`/`transition_out`,
+`required_assets[].source`, capture settings, and render targets respectively. One scene plan
+serves every render aspect ratio.
+
+OpenMontage uses the word "type" for unrelated vocabularies. Tool names such as `talking_head`,
+pipeline categories such as `screen_recording`, video-analysis classifications, asset subtypes,
+and Remotion `cut.type` values keep their own contracts — the four values above apply only to
+canonical `scene_plan.scenes[].type`.
+
 ## Reviewer Protocol
 
 The reviewer is a meta skill (`skills/meta/reviewer.md`) — advisory, never directly blocks progression.

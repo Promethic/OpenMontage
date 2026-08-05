@@ -153,10 +153,8 @@ def build_batch_prompts(
     """
     results = []
     for scene in scenes:
-        # Skip non-visual scene types
-        scene_type = scene.get("type", "")
-        if scene_type in ("transition",):
-            continue
+        # Every canonical scene type carries visible material, so there is nothing to
+        # skip. Transitions are `transition_in`/`transition_out`, never a scene.
         prompt = build_shot_prompt(scene, style_context)
         results.append({
             "scene_id": scene.get("id", "unknown"),

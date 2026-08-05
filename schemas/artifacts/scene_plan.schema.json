@@ -6,7 +6,7 @@
   "type": "object",
   "required": ["version", "scenes"],
   "properties": {
-    "version": { "type": "string", "const": "1.0" },
+    "version": { "type": "string", "const": "2.0" },
     "style_playbook": { "type": "string", "description": "Name of the active style playbook" },
     "scenes": {
       "type": "array",
@@ -17,7 +17,8 @@
           "id": { "type": "string" },
           "type": {
             "type": "string",
-            "enum": ["talking_head", "broll", "animation", "character_scene", "diagram", "text_card", "transition", "generated", "screen_recording"]
+            "description": "How the scene's visible material is made. Not its narrative purpose, asset provenance, capture size, or delivery aspect ratio.",
+            "enum": ["genesio_capture", "generated_video", "image_scene", "graphic_card"]
           },
           "description": { "type": "string" },
           "start_seconds": { "type": "number", "minimum": 0 },

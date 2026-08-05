@@ -29,13 +29,15 @@ Do not plan a full episode with endless generated topic art unless the budget an
 
 ### 3. Define Scene Families
 
-Useful schema scene types:
+The schema accepts exactly four scene types, and each one says how the visible material is made:
 
-- `talking_head` for source video speaker shots
-- `text_card` for quote cards and chapter cards
-- `generated` for optional topic art
-- `diagram` for the rare cases where the discussion needs a graphic
-- `transition` for chapter moves
+- `generated_video` for speaker shots and any other moving-image scene
+- `graphic_card` for quote cards, chapter cards, and the rare graphic the discussion needs
+- `image_scene` for a single still — cover art, a photo, a screenshot
+- `genesio_capture` only for a recording of the Genesio application itself
+
+There is no `transition` scene type. Chapter moves belong in `transition_in` and
+`transition_out` on the adjacent scenes.
 
 ### 4. Use Metadata For Layout Strategy
 

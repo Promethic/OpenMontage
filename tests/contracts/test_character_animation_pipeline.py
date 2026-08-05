@@ -116,11 +116,11 @@ def test_character_animation_smoke_flow(tmp_path):
     validate_artifact("pose_library", pose_library)
 
     scene_plan = {
-        "version": "1.0",
+        "version": "2.0",
         "scenes": [
             {
                 "id": "scene-1",
-                "type": "character_scene",
+                "type": "generated_video",
                 "start_seconds": 0,
                 "end_seconds": 4,
                 "description": "The mouse discovers a glowing seed while the bird reacts.",
@@ -243,11 +243,11 @@ def test_character_renderer_can_handoff_to_video_compose(tmp_path, monkeypatch):
     rig_plan = SvgRigBuilder().execute({"character_design": character_design}).data["rig_plan"]
     pose_library = PoseLibraryBuilder().execute({"rig_plan": rig_plan}).data["pose_library"]
     scene_plan = {
-        "version": "1.0",
+        "version": "2.0",
         "scenes": [
             {
                 "id": "scene-1",
-                "type": "character_scene",
+                "type": "generated_video",
                 "description": "Mouse reacts to a tiny surprise.",
                 "start_seconds": 0,
                 "end_seconds": 1,

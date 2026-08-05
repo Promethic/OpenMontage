@@ -294,9 +294,9 @@ check("Completed stages", get_completed_stages(PIPELINE_DIR, PROJECT_ID) == ["re
 # ===================================================================
 print("\n--- Stage 3: scene_plan ---")
 
-SCENE_TYPES = ["text_card", "diagram", "animation", "generated", "text_card"]
+SCENE_TYPES = ["graphic_card", "graphic_card", "generated_video", "image_scene", "graphic_card"]
 scene_plan = {
-    "version": "1.0",
+    "version": "2.0",
     "style_playbook": "clean-professional",
     "scenes": [
         {
