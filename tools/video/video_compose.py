@@ -434,6 +434,14 @@ class VideoCompose(BaseTool):
             target_w, target_h = (int(v) for v in resolution.split("x"))
         except ValueError:
             target_w, target_h = 1920, 1080
+        target_fps = 30
+        if isinstance(compose_target, dict):
+            try:
+                requested_fps = int(compose_target.get("fps", target_fps))
+                if requested_fps > 0:
+                    target_fps = requested_fps
+            except (TypeError, ValueError):
+                pass
 
         cuts = edit_decisions.get("cuts", [])
         if not cuts:
@@ -510,7 +518,8 @@ class VideoCompose(BaseTool):
                     # pix_fmt / sar across ALL segments — otherwise it throws
                     # "Non-monotonous DTS" or silently produces corrupt output.
                     #
-                    # Target is target_w x target_h @ 30fps, yuv420p, sar=1
+                    # Target is target_w x target_h at the requested compose fps,
+                    # yuv420p, sar=1
                     # (default 1920x1080; overridable via `profile` or
                     # edit_decisions.metadata.compose_target — see above).
                     # fit="pad" letterboxes to preserve all content; fit="cover"
@@ -525,7 +534,7 @@ class VideoCompose(BaseTool):
                             f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease",
                             f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:color=black",
                         ]
-                    vf_parts: list[str] = [*geom, "setsar=1", "fps=30"]
+                    vf_parts: list[str] = [*geom, "setsar=1", f"fps={target_fps}"]
                     af_parts: list[str] = []
                     if speed != 1.0:
                         vf_parts.append(f"setpts={1.0/speed}*PTS")
@@ -540,7 +549,7 @@ class VideoCompose(BaseTool):
                         "-crf", str(crf),
                         "-preset", preset,
                         "-pix_fmt", "yuv420p",
-                        "-r", "30",
+                        "-r", str(target_fps),
                     ])
 
                     # Audio handling: some source clips have no audio stream
@@ -575,7 +584,7 @@ class VideoCompose(BaseTool):
                             "-crf", str(crf),
                             "-preset", preset,
                             "-pix_fmt", "yuv420p",
-                            "-r", "30",
+                            "-r", str(target_fps),
                             "-c:a", "aac",
                             "-b:a", "192k",
                             "-ar", "48000",
@@ -607,6 +616,28 @@ class VideoCompose(BaseTool):
             # Step 3: Apply subtitles and/or replace audio
             final_input = concat_out
             vfilters = []
+
+            # Normalize the final video timeline when the edit declares an
+            # exact duration.  Per-segment AAC priming and fractional-frame
+            # cuts can otherwise leave the video stream a few frames shorter
+            # (or longer) than the audio/container timeline.  Pad with the
+            # final frame, trim to the target, and reassert CFR so a 15 s / 24
+            # fps delivery contains exactly 360 video frames.
+            target_duration = None
+            try:
+                requested_duration = (edit_decisions.get("metadata") or {}).get(
+                    "target_duration_seconds"
+                )
+                if requested_duration is not None and float(requested_duration) > 0:
+                    target_duration = float(requested_duration)
+            except (TypeError, ValueError):
+                target_duration = None
+            if target_duration is not None:
+                vfilters.append(
+                    f"fps={target_fps},"
+                    f"tpad=stop_mode=clone:stop_duration={target_duration},"
+                    f"trim=duration={target_duration},setpts=PTS-STARTPTS"
+                )
 
             if subtitle_path and Path(subtitle_path).exists():
                 style = inputs.get("subtitle_style", {})
@@ -648,6 +679,9 @@ class VideoCompose(BaseTool):
                 cmd.extend(["-map", "0:v", "-map", "1:a", "-c:a", "aac", "-shortest"])
             else:
                 cmd.extend(["-c:a", "copy"])
+
+            if target_duration is not None:
+                cmd.extend(["-t", str(target_duration)])
 
             cmd.append(str(output_path))
             self.run_command(cmd)
@@ -1228,6 +1262,8 @@ class VideoCompose(BaseTool):
         # --- 2. Slideshow risk check ---
         renderer_family = edit_decisions.get("renderer_family")
         scenes = scene_plan or []
+        if isinstance(scenes, dict):
+            scenes = scenes.get("scenes", [])
 
         # If no scene_plan passed, try to extract scene info from cuts
         if not scenes and resolved_cuts:
@@ -1464,7 +1500,7 @@ class VideoCompose(BaseTool):
         if render_result.success and output_path.exists():
             final_review = self._run_final_review(
                 output_path,
-                edit_decisions,
+                compose_inputs["edit_decisions"],
                 inputs.get("proposal_packet"),
                 narration_transcript_path=inputs.get("narration_transcript_path"),
                 script_text=inputs.get("script_text") or self._read_text_file(
@@ -1647,7 +1683,7 @@ class VideoCompose(BaseTool):
         if render_result.success and output_path.exists():
             final_review = self._run_final_review(
                 output_path,
-                edit_decisions,
+                compose_inputs["edit_decisions"],
                 inputs.get("proposal_packet"),
                 narration_transcript_path=inputs.get("narration_transcript_path"),
                 script_text=inputs.get("script_text") or self._read_text_file(
@@ -2586,9 +2622,14 @@ class VideoCompose(BaseTool):
         # Layer 2: edit_decisions subtitle style
         if edit_decisions:
             ed_style = edit_decisions.get("subtitles", {}).get("style", {})
-            for k, v in ed_style.items():
-                if v is not None:
-                    resolved[k] = v
+            # edit_decisions.schema.json defines this field as a display-mode
+            # string (for example "sentence" or "none").  Older callers also
+            # pass a mapping of ASS styling overrides.  Only the latter belongs
+            # in this resolver; a valid schema string must not crash compose.
+            if isinstance(ed_style, dict):
+                for k, v in ed_style.items():
+                    if v is not None:
+                        resolved[k] = v
 
         # Layer 3: Explicit override (highest priority)
         if explicit_style:

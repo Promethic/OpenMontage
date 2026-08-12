@@ -74,9 +74,14 @@ class KlingVideo(BaseTool):
             },
             "duration": {
                 "type": "string",
-                "enum": ["5", "10"],
+                "enum": [str(seconds) for seconds in range(3, 16)],
                 "default": "5",
                 "description": "Duration in seconds",
+            },
+            "generate_audio": {
+                "type": "boolean",
+                "default": False,
+                "description": "Generate Kling native audio. Disabled by default for externally mixed productions.",
             },
             "aspect_ratio": {
                 "type": "string",
@@ -107,6 +112,9 @@ class KlingVideo(BaseTool):
     def estimate_cost(self, inputs: dict[str, Any]) -> float:
         variant = inputs.get("model_variant", "v3/standard")
         duration = int(inputs.get("duration", "5"))
+        if variant == "v3/standard":
+            rate_per_second = 0.126 if inputs.get("generate_audio", False) else 0.084
+            return rate_per_second * duration
         if "master" in variant:
             return 0.30 * (duration / 5)
         if "pro" in variant:
@@ -138,6 +146,8 @@ class KlingVideo(BaseTool):
             payload["duration"] = inputs["duration"]
         if inputs.get("aspect_ratio"):
             payload["aspect_ratio"] = inputs["aspect_ratio"]
+        if variant == "v3/standard":
+            payload["generate_audio"] = inputs.get("generate_audio", False)
         if operation == "image_to_video" and inputs.get("image_url"):
             payload["image_url"] = inputs["image_url"]
 

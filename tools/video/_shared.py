@@ -253,6 +253,15 @@ def load_diffusers_pipeline(pipeline_class: str, model_id: str, enable_offload: 
 
     pipeline = pipeline_class_obj.from_pretrained(model_id, torch_dtype=dtype)
 
+    if device == "mps":
+        # Some Diffusers pipelines (notably CogVideoX) retain float64 buffers
+        # even when their weights are loaded as float16. Metal cannot move a
+        # float64 tensor to MPS, so normalize those buffers before `.to(mps)`.
+        for component in getattr(pipeline, "components", {}).values():
+            apply_fn = getattr(component, "_apply", None)
+            if callable(apply_fn):
+                apply_fn(lambda tensor: tensor.float() if tensor.dtype == torch.float64 else tensor)
+
     if enable_offload:
         if device == "cuda":
             pipeline.enable_model_cpu_offload()

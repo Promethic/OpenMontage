@@ -38,6 +38,8 @@
               "motion_commitment",
               "concept_selection",
               "voice_selection",
+              "approval_policy",
+              "delivery_promise",
               "capability_extension",
               "playbook_override",
               "visual_accuracy_check"

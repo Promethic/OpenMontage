@@ -113,6 +113,7 @@ def _make_pipeline_mocks(monkeypatch, *, cuda=False, mps=False, bf16=False):
     fake_torch.backends.mps.is_available.return_value = mps
     fake_torch.float16 = "float16"
     fake_torch.float32 = "float32"
+    fake_torch.float64 = "float64"
     fake_torch.bfloat16 = "bfloat16"
 
     fake_pipeline_instance = MagicMock()
@@ -152,6 +153,32 @@ def test_load_diffusers_pipeline_offload_falls_back_on_mps(monkeypatch):
     # Must NOT call enable_model_cpu_offload() on MPS
     fake_inst.enable_model_cpu_offload.assert_not_called()
     # Must fall back to .to("mps")
+    fake_inst.to.assert_called_once_with("mps")
+
+
+def test_load_diffusers_pipeline_converts_float64_component_tensors_before_mps(monkeypatch):
+    """MPS-incompatible float64 buffers must be converted before pipeline.to('mps')."""
+    _shared, _, fake_inst = _make_pipeline_mocks(monkeypatch, mps=True)
+
+    converted = []
+
+    class FakeFloat64Tensor:
+        dtype = "float64"
+
+        def float(self):
+            converted.append(True)
+            return "float32-tensor"
+
+    class FakeComponent:
+        def _apply(self, fn):
+            assert fn(FakeFloat64Tensor()) == "float32-tensor"
+            return self
+
+    fake_inst.components = {"scheduler": FakeComponent()}
+
+    _shared.load_diffusers_pipeline("LTXPipeline", "Lightricks/LTX-Video", enable_offload=False)
+
+    assert converted == [True]
     fake_inst.to.assert_called_once_with("mps")
 
 
