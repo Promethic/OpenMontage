@@ -753,6 +753,37 @@ class VideoCompose(BaseTool):
         inputs: dict[str, Any],
         edit_decisions: dict[str, Any],
     ) -> ToolResult:
+        # The staged copy under remotion-composer/projects/ exists only for the bundler.
+        # Leaving it behind makes the checkout look modified to tools that verify it
+        # (Studio refuses to start on an unexpected contract path), so it is always
+        # removed once the render finishes, successfully or not.
+        self._atelier_staged_dir: Path | None = None
+        try:
+            return self._render_via_atelier_staged(inputs, edit_decisions)
+        finally:
+            self._unstage_atelier_project()
+
+    def _unstage_atelier_project(self) -> None:
+        import shutil
+
+        staged = getattr(self, "_atelier_staged_dir", None)
+        self._atelier_staged_dir = None
+        if staged is None:
+            return
+        if staged.is_symlink():
+            staged.unlink(missing_ok=True)
+        elif staged.is_dir():
+            shutil.rmtree(staged, ignore_errors=True)
+        try:
+            staged.parent.rmdir()  # only succeeds when no other project is staged
+        except OSError:
+            pass
+
+    def _render_via_atelier_staged(
+        self,
+        inputs: dict[str, Any],
+        edit_decisions: dict[str, Any],
+    ) -> ToolResult:
         """Render a hand-authored, project-local Remotion composition ("atelier" mode).
 
         Unlike the cut-schema path, atelier mode does NOT route through the
@@ -997,6 +1028,7 @@ class VideoCompose(BaseTool):
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
 
+        self._atelier_staged_dir = staging_dir
         return staging_dir / entry_path.name
 
     # Stock-registry import patterns that violate the atelier doctrine.
