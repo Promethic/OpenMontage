@@ -291,7 +291,8 @@ class ImageSelector(BaseTool):
                     tool.name, ", ".join(stripped),
                 )
 
-        result = tool.execute(adapted)
+        from lib.providers.selectors import delegate
+        result = delegate(tool, adapted)
         if result.success:
             result.data.setdefault("selected_tool", tool.name)
             result.data["selected_provider"] = tool.provider
@@ -314,6 +315,10 @@ class ImageSelector(BaseTool):
         """Select the best provider using scored ranking."""
         from lib.scoring import rank_providers
 
+        from lib.providers.selectors import explicit_tool
+        explicit, selected = explicit_tool(inputs, candidates)
+        if explicit:
+            return selected, None
         preferred = inputs.get("preferred_provider", "auto")
         allowed = set(inputs.get("allowed_providers") or [])
         if allowed:

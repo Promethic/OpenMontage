@@ -310,12 +310,18 @@ class VideoSelector(BaseTool):
             # If the provider uses image_url (not reference_image_path), upload and convert
             if "image_url" in tool_props and "image_url" not in adapted:
                 try:
-                    from tools.video._shared import upload_image_fal
-                    adapted["image_url"] = upload_image_fal(adapted["reference_image_path"])
+                    from lib.providers.catalog import PAID_TOOLS
+                    from lib.providers.context import in_worker
+                    if tool.name in PAID_TOOLS and not in_worker():
+                        adapted["image_url"] = adapted["reference_image_path"]
+                    else:
+                        from tools.video._shared import upload_image_fal
+                        adapted["image_url"] = upload_image_fal(adapted["reference_image_path"])
                 except Exception as e:
                     return ToolResult(success=False, error=f"Failed to upload reference image: {e}")
 
-        result = tool.execute(adapted)
+        from lib.providers.selectors import delegate
+        result = delegate(tool, adapted)
         if result.success:
             result.data.setdefault("selected_tool", tool.name)
             result.data["selected_provider"] = tool.provider
@@ -344,6 +350,10 @@ class VideoSelector(BaseTool):
         """
         from lib.scoring import rank_providers, ProviderScore
 
+        from lib.providers.selectors import explicit_tool
+        explicit, selected = explicit_tool(inputs, candidates)
+        if explicit:
+            return selected, None
         preferred = inputs.get("preferred_provider", "auto")
         allowed = set(inputs.get("allowed_providers") or [])
         if allowed:

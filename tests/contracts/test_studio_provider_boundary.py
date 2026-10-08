@@ -179,3 +179,39 @@ def test_kling_paid_post_has_no_transport_retry(monkeypatch):
     with pytest.raises(KlingAPIError):
         KlingClient(session=session, max_retries=2).post("/v1/videos/text2video", {})
     assert session.calls == 1
+
+
+def test_selector_keeps_explicit_platform_and_strips_only_selector_metadata(
+    monkeypatch,
+):
+    from lib.providers.selectors import delegate, explicit_tool
+    from tools.graphics.flux_image import FluxImage
+    from lib.providers import client
+
+    received = []
+    monkeypatch.setattr(
+        client, "execute", lambda name, inputs: received.append((name, inputs))
+    )
+    tool = FluxImage()
+    inputs = {
+        "prompt": "test",
+        "preferred_provider": "auto",
+        "studio_route_id": "flux_image:fal",
+        "scene_id": "scene-1",
+    }
+    assert explicit_tool(inputs, [tool]) == (True, tool)
+    delegate(tool, inputs)
+    assert received == [
+        (
+            "flux_image",
+            {
+                "prompt": "test",
+                "studio_route_id": "flux_image:fal",
+                "scene_id": "scene-1",
+            },
+        )
+    ]
+    assert explicit_tool({"studio_route_id": "recraft_image:fal"}, [tool]) == (
+        True,
+        None,
+    )
