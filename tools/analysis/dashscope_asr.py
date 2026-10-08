@@ -165,11 +165,16 @@ class DashscopeAsr(BaseTool):
             )
 
         audio_url = inputs.get("audio_url", "").strip()
+        from lib.providers.context import in_worker
+        if in_worker() and Path(audio_url).is_file():
+            from lib.providers.dashscope import temporary_file
+            audio_url = temporary_file(audio_url, inputs.get("model", "qwen3-asr-flash-filetrans"))
+            inputs = {**inputs, "audio_url": audio_url, "_studio_oss_reference": True}
         if not audio_url:
             return ToolResult(
                 success=False, error="audio_url is required."
             )
-        if not self._is_public_url(audio_url):
+        if not self._is_public_url(audio_url) and not (in_worker() and inputs.get("_studio_oss_reference") and audio_url.startswith("oss://")):
             return ToolResult(
                 success=False,
                 error=(
@@ -209,6 +214,7 @@ class DashscopeAsr(BaseTool):
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "X-DashScope-Async": "enable",
+            "X-DashScope-OssResourceResolve": "enable",
         }
 
         # Submit

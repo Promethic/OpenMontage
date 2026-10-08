@@ -89,6 +89,27 @@ Core loop:
 
 ## Decision Communication Contract
 
+### Paid execution authority
+
+All paid tools, including standalone runs, require the Genesio Studio backend.
+Configure `STUDIO_API_URL`, a scoped `STUDIO_API_TOKEN`, and `STUDIO_PROJECT_ID`.
+Keep provider credentials on the Studio service, never in this checkout or an
+agent environment. Read `/api/provider-tools` for routes and availability.
+
+Use an explicit `studio_route_id` for tools with multiple gateways, and a stable
+`studio_idempotency_key`. An interrupted or unknown order must be refreshed in
+Studio; a new key or another provider is not a recovery mechanism. Quotes bind
+the route, parameters, references, reviewed price and maximum reserved charge.
+Only the operator may configure pricing, grant approvals or settle unknown costs.
+
+Public `execute()` methods delegate to Studio before optional telemetry. Private
+provider implementations run only inside Studio-owned workers. Local tools and
+free stock APIs remain independent. Research Lab is a separate application and
+is not governed by this production execution boundary.
+
+Backlot runtime caches live outside the pinned source tree. Override their root
+with `OPENMONTAGE_RUNTIME_ROOT`; never place caches or credentials in tracked code.
+
 For any meaningful production decision, the agent must communicate the decision before acting. The user should never have to infer which provider, model, or render path was chosen after the fact.
 
 ### Announce Before Execution

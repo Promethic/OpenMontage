@@ -156,7 +156,7 @@ class ImageGen(BaseTool):
         from openai import OpenAI
         import base64
 
-        client = OpenAI()
+        client = OpenAI(max_retries=0)
         prompt = inputs["prompt"]
         size = f"{inputs.get('width', 1024)}x{inputs.get('height', 1024)}"
         model = inputs.get("model", "gpt-image-2")
@@ -202,14 +202,8 @@ class ImageGen(BaseTool):
         if seed is not None:
             payload["seed"] = seed
 
-        response = requests.post(
-            "https://fal.run/fal-ai/flux/dev",
-            headers={"Authorization": f"Key {api_key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=120,
-        )
-        response.raise_for_status()
-        data = response.json()
+        from lib.providers.fal import queued_result
+        data = queued_result("fal-ai/flux/dev", payload, {"Authorization": f"Key {api_key}", "Content-Type": "application/json"})
 
         image_url = data["images"][0]["url"]
         image_response = requests.get(image_url, timeout=60)

@@ -35,6 +35,7 @@ class KlingClient:
         self.api_key = api_key if api_key is not None else os.environ.get("KLING_API_KEY")
         self.base_url = (base_url or os.environ.get("KLING_API_BASE_URL") or DEFAULT_API_BASE_URL).rstrip("/")
         self.session = session or requests.Session()
+        # Creating a paid task is not safely retryable after a lost response.
         self.max_retries = max_retries
 
     @property

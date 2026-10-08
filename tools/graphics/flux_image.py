@@ -124,17 +124,11 @@ class FluxImage(BaseTool):
             payload["negative_prompt"] = inputs["negative_prompt"]
 
         try:
-            response = requests.post(
-                f"https://fal.run/fal-ai/{model}",
-                headers={
+            from lib.providers.fal import queued_result
+            data = queued_result(f"fal-ai/{model}", payload, {
                     "Authorization": f"Key {api_key}",
                     "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=120,
-            )
-            response.raise_for_status()
-            data = response.json()
+                })
 
             image_url = data["images"][0]["url"]
             image_response = requests.get(image_url, timeout=60)

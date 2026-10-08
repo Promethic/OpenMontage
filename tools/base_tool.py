@@ -53,7 +53,9 @@ def _load_dotenv() -> None:
                 if match:
                     value = value[: match.start()]
                 value = value.strip()
-            if key and key not in os.environ:
+            # Paid credentials belong to Studio, even for direct tool imports.
+            from lib.providers.catalog import FREE_ENVIRONMENT
+            if key in FREE_ENVIRONMENT and key not in os.environ:
                 os.environ[key] = value
 
 
@@ -132,10 +134,12 @@ class ToolResult:
     data: dict[str, Any] = field(default_factory=dict)
     artifacts: list[str] = field(default_factory=list)
     error: Optional[str] = None
-    cost_usd: float = 0.0
+    cost_usd: Optional[float] = 0.0
     duration_seconds: float = 0.0
     seed: Optional[int] = None
     model: Optional[str] = None
+    operation_id: Optional[str] = None
+    billing_status: Optional[str] = None
 
 
 import threading as _threading
@@ -224,6 +228,36 @@ def _instrument_execute(fn: Callable) -> Callable:
     return wrapper
 
 
+def _broker_execute(fn: Callable) -> Callable:
+    """Mandatory billing boundary outside optional Backlot instrumentation."""
+    @functools.wraps(fn)
+    def wrapped(self, inputs: Any, *args: Any, **kwargs: Any):
+        from lib.providers.catalog import FREE_API_TOOLS, paid_path
+        from lib.providers.context import in_worker
+
+        if not in_worker():
+            if paid_path(self.name, inputs if isinstance(inputs, dict) else {}):
+                from lib.providers.client import execute
+                return execute(self.name, inputs)
+            if self.runtime == ToolRuntime.API and self.name not in FREE_API_TOOLS:
+                return ToolResult(success=False, error="Paid tool has no reviewed Studio adapter", cost_usd=None, billing_status="notSubmitted")
+        return fn(self, inputs, *args, **kwargs)
+    wrapped._studio_brokered = True
+    return wrapped
+
+
+def _broker_status(fn: Callable) -> Callable:
+    @functools.wraps(fn)
+    def wrapped(self):
+        from lib.providers.catalog import PAID_TOOLS
+        from lib.providers.context import in_worker
+        if self.name in PAID_TOOLS and not in_worker():
+            from lib.providers.client import available
+            return ToolStatus.AVAILABLE if available(self.name) else ToolStatus.UNAVAILABLE
+        return fn(self)
+    return wrapped
+
+
 class BaseTool(ABC):
     """Abstract base class for all OpenMontage tools."""
 
@@ -232,7 +266,16 @@ class BaseTool(ABC):
         super().__init_subclass__(**kwargs)
         impl = cls.__dict__.get("execute")
         if impl is not None and not getattr(impl, "__isabstractmethod__", False):
-            cls.execute = _instrument_execute(impl)
+            def provider_implementation(self, inputs, *args, **kwargs):
+                from lib.providers.context import in_worker
+                if not in_worker():
+                    raise RuntimeError("Provider implementation is private to the Studio worker")
+                return impl(self, inputs, *args, **kwargs)
+            cls._execute_provider = provider_implementation
+            cls.execute = _broker_execute(_instrument_execute(impl))
+        status = cls.__dict__.get("get_status")
+        if status is not None:
+            cls.get_status = _broker_status(status)
 
     # --- Identity (override in subclasses) ---
     name: str = ""
@@ -295,6 +338,11 @@ class BaseTool(ABC):
 
     def get_status(self) -> ToolStatus:
         """Check if this tool's dependencies are satisfied."""
+        from lib.providers.catalog import PAID_TOOLS
+        from lib.providers.context import in_worker
+        if self.name in PAID_TOOLS and not in_worker():
+            from lib.providers.client import available
+            return ToolStatus.AVAILABLE if available(self.name) else ToolStatus.UNAVAILABLE
         try:
             self.check_dependencies()
             return ToolStatus.AVAILABLE

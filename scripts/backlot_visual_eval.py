@@ -27,7 +27,7 @@ from typing import Any
 from PIL import Image, ImageChops
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-STAGE_DIR = REPO_ROOT / ".backlot" / "screenshot-stage"
+STAGE_DIR = Path(os.environ.get("OPENMONTAGE_RUNTIME_ROOT", str(REPO_ROOT.parent / f".{REPO_ROOT.name}-runtime"))) / "backlot" / "screenshot-stage"
 GOLDENS_DIR = REPO_ROOT / "internal" / "evals" / "goldens"
 CAPTURE_ROOT = REPO_ROOT / "internal" / "evals" / "captures"
 PORT = 4791

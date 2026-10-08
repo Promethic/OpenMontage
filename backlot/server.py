@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from pathlib import Path
 from typing import Optional
@@ -20,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
-THUMB_CACHE_DIR = REPO_ROOT / ".backlot" / "thumbs"
+THUMB_CACHE_DIR = Path(os.environ.get("OPENMONTAGE_RUNTIME_ROOT", str(REPO_ROOT.parent / f".{REPO_ROOT.name}-runtime"))) / "backlot" / "thumbs"
 THUMB_WIDTHS = (320, 640, 960)
 
 # Paths inside a project whose changes are pure noise for the board.

@@ -133,7 +133,7 @@ class OpenAIImage(BaseTool):
         from openai import OpenAI
 
         start = time.time()
-        client = OpenAI()
+        client = OpenAI(max_retries=0)
         model = inputs.get("model", "gpt-image-2")
         prompt = inputs["prompt"]
         size = inputs.get("size", "1024x1024")

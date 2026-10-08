@@ -90,6 +90,15 @@ class CostTracker:
         return max(0.0, self.budget_remaining_usd - holdback)
 
     def cost_snapshot(self) -> dict[str, float]:
+        if any(entry.get("budget_authority") == "studio" for entry in self.entries):
+            import os
+            from urllib.parse import quote
+            from lib.providers.client import _call
+            project = os.environ.get("STUDIO_PROJECT_ID")
+            if not project:
+                raise RuntimeError("Studio budget snapshot requires STUDIO_PROJECT_ID")
+            budget = _call("GET", f"/api/projects/{quote(project, safe='')}/workflow")["budget"]
+            return {"total_spent_usd": budget["spentUsd"], "total_reserved_usd": budget["reservedUsd"], "budget_remaining_usd": budget["availableUsd"]}
         return {
             "total_spent_usd": round(self.budget_spent_usd, 4),
             "total_reserved_usd": round(self.budget_reserved_usd, 4),
@@ -122,6 +131,13 @@ class CostTracker:
         """
         entry = self._find(entry_id)
         estimated = entry["estimated_usd"]
+        from lib.providers.catalog import PAID_TOOLS
+        if entry["tool"] in PAID_TOOLS:
+            from lib.providers.client import _connection
+            _connection()
+            entry.update(status="delegated", reserved_usd=0.0, actual_usd=None, budget_authority="studio")
+            self._save()
+            return
 
         # Check single-action approval threshold
         if estimated > self.single_action_approval_usd:
@@ -165,6 +181,9 @@ class CostTracker:
         """Reconcile actual spend after tool execution."""
         entry = self._find(entry_id)
         entry["status"] = EntryStatus.COMPLETED.value if success else EntryStatus.FAILED.value
+        if entry.get("budget_authority") == "studio":
+            entry["status"] = "delegated"
+            return
         entry["actual_usd"] = round(actual_usd, 4)
         entry["reserved_usd"] = 0.0
         entry["timestamp"] = self._now()
