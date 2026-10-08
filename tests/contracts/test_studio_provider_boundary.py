@@ -15,7 +15,11 @@ from tools.tool_registry import ToolRegistry
 def test_every_paid_api_tool_is_classified_and_guarded():
     registry = ToolRegistry()
     registry.discover()
-    paid = {name for name, tool in registry._tools.items() if tool.runtime == ToolRuntime.API and name not in FREE_API_TOOLS}
+    paid = {
+        name
+        for name, tool in registry._tools.items()
+        if tool.runtime == ToolRuntime.API and name not in FREE_API_TOOLS
+    }
     assert paid <= PAID_TOOLS.keys()
     for name in PAID_TOOLS:
         tool = registry.get(name)
@@ -29,6 +33,7 @@ def test_every_paid_api_tool_is_classified_and_guarded():
 
 def test_direct_import_cannot_buy_with_ambient_provider_keys(monkeypatch):
     from tools.graphics.flux_image import FluxImage
+
     monkeypatch.setenv("FAL_KEY", "test-only-key")
     monkeypatch.delenv("STUDIO_API_URL", raising=False)
     monkeypatch.delenv("STUDIO_API_TOKEN", raising=False)
@@ -43,8 +48,10 @@ def test_direct_import_cannot_buy_with_ambient_provider_keys(monkeypatch):
 def test_local_execution_remains_independent():
     class Local(BaseTool):
         name = "local_boundary_test"
+
         def execute(self, inputs):
             return ToolResult(success=True, data=inputs)
+
     assert Local().execute({"value": 1}).success
 
 
@@ -52,8 +59,10 @@ def test_new_unreviewed_paid_tool_fails_closed():
     class Unreviewed(BaseTool):
         name = "unreviewed_paid"
         runtime = ToolRuntime.API
+
         def execute(self, inputs):
             raise AssertionError("Paid implementation must not execute")
+
     result = Unreviewed().execute({})
     assert not result.success
     assert result.billing_status == "notSubmitted"
@@ -67,33 +76,106 @@ def test_route_never_silently_switches_gateway():
 
 def test_stages_are_persisted_before_returning_and_retry_is_blocked(monkeypatch):
     from lib.providers import worker
+
     events = []
     monkeypatch.setattr(worker, "public_target", lambda url: urlsplit(url).hostname)
-    monkeypatch.setattr(worker, "emit", lambda event, **kwargs: events.append((event, kwargs)))
+    monkeypatch.setattr(
+        worker, "emit", lambda event, **kwargs: events.append((event, kwargs))
+    )
     recorder = StageRecorder("fal")
     headers = {}
-    stage = recorder.before("POST", "https://queue.fal.run/fal-ai/flux/dev", headers, b'{"prompt":"test"}')
+    stage = recorder.before(
+        "POST", "https://queue.fal.run/fal-ai/flux/dev", headers, b'{"prompt":"test"}'
+    )
     assert headers["X-Fal-No-Retry"] == "1"
     assert events[0][1] == {"acknowledge": True}
-    recorder.after(stage, 200, json.dumps({"request_id": "original-order", "status_url": "https://queue.fal.run/fal-ai/flux/requests/original-order/status"}).encode())
+    recorder.after(
+        stage,
+        200,
+        json.dumps(
+            {
+                "request_id": "original-order",
+                "status_url": "https://queue.fal.run/fal-ai/flux/requests/original-order/status",
+            }
+        ).encode(),
+    )
     assert events[1][0]["providerOrderId"] == "original-order"
     with pytest.raises(RuntimeError, match="retry blocked"):
-        recorder.before("POST", "https://queue.fal.run/fal-ai/flux/dev", headers, b'{"prompt":"test"}')
+        recorder.before(
+            "POST",
+            "https://queue.fal.run/fal-ai/flux/dev",
+            headers,
+            b'{"prompt":"test"}',
+        )
 
 
 def test_sdk_download_does_not_receive_provider_auth(monkeypatch):
     from lib.providers import worker
+
     monkeypatch.setattr(worker, "public_target", lambda url: urlsplit(url).hostname)
     recorder = StageRecorder("fal")
     headers = {"Authorization": "Key test-only"}
-    assert recorder.before("GET", "https://cdn.example.org/result.mp4", headers, b"") is None
+    assert (
+        recorder.before("GET", "https://cdn.example.org/result.mp4", headers, b"")
+        is None
+    )
     assert "Authorization" not in headers
 
 
 def test_worker_requires_owned_invocation(monkeypatch):
     from io import StringIO
     from lib.providers import worker
+
     monkeypatch.delenv("STUDIO_PROVIDER_WORKER_NONCE", raising=False)
-    monkeypatch.setattr(worker.sys, "__stdin__", StringIO('{"contractVersion":1,"action":"execute"}\n'))
+    monkeypatch.setattr(
+        worker.sys, "__stdin__", StringIO('{"contractVersion":1,"action":"execute"}\n')
+    )
     with pytest.raises(RuntimeError, match="service-owned"):
         worker.main()
+
+
+def test_response_stream_is_bounded(monkeypatch):
+    import httpx
+    from lib.providers import worker
+
+    monkeypatch.setattr(worker, "MAX_RESPONSE_BYTES", 8)
+    response = httpx.Response(200, stream=httpx.ByteStream(b"large response"))
+    with pytest.raises(RuntimeError, match="bounded result"):
+        worker.bounded_httpx_response(response)
+    assert response.is_closed
+
+
+def test_lost_submit_response_remains_unresolved(monkeypatch):
+    from lib.providers import client
+
+    monkeypatch.setenv("STUDIO_PROJECT_ID", "registered")
+
+    def call(method, path, payload=None):
+        if path.endswith("/quote"):
+            return {"quoteId": "test"}
+        raise RuntimeError("Response lost")
+
+    monkeypatch.setattr(client, "_call", call)
+    result = client.execute("flux_image", {"prompt": "test"})
+    assert result.billing_status == "unresolved"
+    assert result.cost_usd is None
+
+
+def test_kling_paid_post_has_no_transport_retry(monkeypatch):
+    import requests
+    from tools._kling.client import KlingClient
+    from tools._kling.errors import KlingAPIError
+
+    monkeypatch.setenv("KLING_API_KEY", "test-only")
+
+    class Session:
+        calls = 0
+
+        def post(self, *args, **kwargs):
+            self.calls += 1
+            raise requests.Timeout("Response lost")
+
+    session = Session()
+    with pytest.raises(KlingAPIError):
+        KlingClient(session=session, max_retries=2).post("/v1/videos/text2video", {})
+    assert session.calls == 1

@@ -1,6 +1,8 @@
 """Contract tests for the Kling official TTS provider."""
 
 from __future__ import annotations
+import pytest
+pytestmark = pytest.mark.usefixtures("private_provider_adapter")
 
 import sys
 from pathlib import Path

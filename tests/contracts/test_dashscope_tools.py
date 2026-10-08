@@ -11,6 +11,7 @@ Run: pytest tests/contracts/test_dashscope_tools.py -v
 from pathlib import Path
 
 import pytest
+pytestmark = pytest.mark.usefixtures("private_provider_adapter")
 
 from tools.base_tool import (
     BaseTool,

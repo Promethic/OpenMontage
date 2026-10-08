@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+pytestmark = pytest.mark.usefixtures("private_provider_adapter")
 
 from tools.video.kling_video import KlingVideo
 

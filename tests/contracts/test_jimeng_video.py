@@ -7,6 +7,7 @@ Run: pytest tests/contracts/test_jimeng_video.py -v
 """
 
 import pytest
+pytestmark = pytest.mark.usefixtures("private_provider_adapter")
 
 from tools.base_tool import (
     BaseTool,

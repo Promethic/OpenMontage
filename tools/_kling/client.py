@@ -138,7 +138,8 @@ class KlingClient:
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         url = self._url(path)
         last_error: KlingAPIError | None = None
-        for attempt in range(self.max_retries + 1):
+        retry_limit = self.max_retries if method.lower() in {"get", "head"} else 0
+        for attempt in range(retry_limit + 1):
             try:
                 response = getattr(self.session, method)(url, headers=self.headers, timeout=30, **kwargs)
                 self._raise_for_http_error(response)
@@ -147,12 +148,12 @@ class KlingClient:
                 return data
             except KlingAPIError as error:
                 last_error = error
-                if attempt >= self.max_retries or not is_retryable_kling_error(error):
+                if attempt >= retry_limit or not is_retryable_kling_error(error):
                     raise
                 time.sleep(min(2.0 * (attempt + 1), 8.0))
             except requests.RequestException as exc:
                 last_error = KlingAPIError(str(exc))
-                if attempt >= self.max_retries:
+                if attempt >= retry_limit:
                     raise last_error from exc
                 time.sleep(min(2.0 * (attempt + 1), 8.0))
         raise last_error or KlingAPIError("Kling API request failed")
