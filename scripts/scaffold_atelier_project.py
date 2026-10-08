@@ -173,8 +173,9 @@ Naming them keeps you from drifting into them.
 # {slug} — atelier (bespoke) composition
 
 Hand-authored Remotion composition. Source of truth lives here under
-`{rel_proj}/`; at render time the atelier path auto-stages a junction at
-`remotion-composer/projects/{slug}/` so the bundler can resolve `node_modules`.
+`{rel_proj}/`; at render time the atelier path stages an isolated source copy
+in the sibling runtime, linked to the pinned composer's `node_modules`.
+The copy is removed after rendering. Project sources remain in place.
 
 ## Doctrine
 - Read `skills/meta/bespoke-composition.md` first.

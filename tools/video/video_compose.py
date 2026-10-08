@@ -753,10 +753,8 @@ class VideoCompose(BaseTool):
         inputs: dict[str, Any],
         edit_decisions: dict[str, Any],
     ) -> ToolResult:
-        # The staged copy under remotion-composer/projects/ exists only for the bundler.
-        # Leaving it behind makes the checkout look modified to tools that verify it
-        # (Studio refuses to start on an unexpected contract path), so it is always
-        # removed once the render finishes, successfully or not.
+        # Each render owns an isolated stage outside the pinned checkout. Remove
+        # only that stage on success or failure; canonical project sources remain.
         self._atelier_staged_dir: Path | None = None
         try:
             return self._render_via_atelier_staged(inputs, edit_decisions)
@@ -796,9 +794,9 @@ class VideoCompose(BaseTool):
 
         Contract — edit_decisions["bespoke"] = {
             "entry":          <path to the project-local Remotion entry .tsx;
-                               MUST live under remotion-composer/ so the
-                               Remotion bundler can resolve node_modules.
-                               Convention: remotion-composer/projects/<slug>/index.tsx>,
+                               convention: projects/<slug>/index.tsx. The tool
+                               stages a private copy outside the checkout with
+                               a link to the pinned composer dependencies>,
             "composition_id": <id registered in that entry's Root>,
             "props_path":     <optional absolute path to a props JSON (--props)>,
             "public_dir":     <optional path to a SMALL per-project public dir,
@@ -839,32 +837,28 @@ class VideoCompose(BaseTool):
             entry_path = cand if cand.exists() else (composer_dir / entry).resolve()
         entry_path = entry_path.resolve()
         if not entry_path.exists():
-            return ToolResult(success=False, error=f"atelier entry not found: {entry_path}")
-
-        # Remotion's bundler resolves `remotion` and friends by walking up from the
-        # entry file to find node_modules — so the entry must live under
-        # remotion-composer/ at render time. But OpenMontage's project convention is
-        # repo-root projects/<slug>/, where artifacts/assets/renders/ already live.
-        # Resolution: keep the source of truth under projects/<slug>/ and auto-stage
-        # a directory junction (Windows) / symlink (Unix) at
-        # remotion-composer/projects/<slug>/ → projects/<slug>/ so the bundler sees
-        # the entry inside the composer tree without us copying files. Junctions are
-        # weightless, idempotent across renders, and need no admin/dev-mode on Windows.
-        try:
-            entry_path.relative_to(composer_dir)
-            effective_entry = entry_path
-        except ValueError:
             try:
-                effective_entry = self._stage_atelier_project(entry_path, composer_dir)
-            except Exception as e:
-                return ToolResult(
-                    success=False,
-                    error=(
-                        f"atelier auto-stage failed for entry {entry_path}: {e}. "
-                        f"Either place the entry under {composer_dir}/projects/<slug>/ "
-                        f"directly, or fix the staging permission issue."
-                    ),
-                )
+                legacy = entry_path.relative_to(composer_dir / "projects")
+                preserved = self._atelier_runtime_composer(composer_dir) / "legacy-projects" / legacy
+            except ValueError:
+                preserved = None
+            if preserved is None or not preserved.is_file():
+                return ToolResult(success=False, error=f"atelier entry not found: {entry_path}")
+            entry_path = preserved
+
+        # Webpack resolves packages from the staged source's location. The sibling
+        # runtime contains a node_modules link to the pinned composer dependencies,
+        # so temporary creative code never invalidates concurrent Studio discovery.
+        try:
+            effective_entry = self._stage_atelier_project(entry_path, composer_dir)
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                error=(
+                    f"atelier auto-stage failed for entry {entry_path}: {e}. "
+                    "Keep the source under projects/<slug>/ and make the sibling runtime writable."
+                ),
+            )
 
         output_path = Path(inputs.get("output_path", "renders/output.mp4")).resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -960,18 +954,40 @@ class VideoCompose(BaseTool):
     # artifacts) and is referenced via --public-dir or absolute paths.
     _ATELIER_STAGE_EXTS = {".tsx", ".ts", ".jsx", ".js", ".css"}
 
+    @staticmethod
+    def _atelier_runtime_composer(composer_dir: Path) -> Path:
+        """Keep derived creative code outside the strictly verified checkout."""
+        import os
+
+        checkout = composer_dir.parent.resolve()
+        root = Path(os.environ.get(
+            "OPENMONTAGE_RUNTIME_ROOT",
+            str(checkout.parent / f".{checkout.name}-runtime"),
+        )).expanduser().resolve()
+        if root.is_relative_to(checkout):
+            raise ValueError("Remotion staging must live outside the code checkout")
+        runtime = root / "remotion-composer"
+        runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
+        modules = runtime / "node_modules"
+        if modules.exists() or modules.is_symlink():
+            if not modules.is_symlink() or modules.resolve() != (composer_dir / "node_modules").resolve():
+                raise ValueError("Runtime node_modules must point to the pinned composer dependencies")
+        else:
+            modules.symlink_to((composer_dir / "node_modules").resolve(), target_is_directory=True)
+        return runtime
+
     def _stage_atelier_project(self, entry_path: Path, composer_dir: Path) -> Path:
-        """Auto-stage a bespoke project under remotion-composer/projects/<slug>/.
+        """Stage a private source copy in the sibling Remotion runtime.
 
         The source of truth lives under the repo-root `projects/<slug>/` (where
         artifacts/, assets/, renders/ already are). Remotion's webpack bundler,
         however, resolves modules (`remotion`, `@remotion/*`) by walking up from
         the entry's REAL location — so a directory junction/symlink would
         dereference and webpack would fail to find node_modules. We copy the
-        source files into a sibling dir inside the composer tree instead.
+        source files outside the checkout with a link to composer dependencies.
 
-        mtime-skip semantics make repeat renders cheap (typical project is a
-        handful of small .tsx files). Non-source files (assets, renders, props
+        Each render owns its own directory, including simultaneous renders of
+        the same project. Non-source files (assets, renders, props
         JSON) stay only in the real project dir and are referenced via
         --public-dir or absolute paths in props.
 
@@ -994,22 +1010,11 @@ class VideoCompose(BaseTool):
         except Exception:
             pass
 
-        staging_root = composer_dir / "projects"
+        import tempfile
+
+        staging_root = self._atelier_runtime_composer(composer_dir) / "projects"
         staging_root.mkdir(parents=True, exist_ok=True)
-        staging_dir = staging_root / slug
-
-        # If a stale junction/symlink is in the way from an earlier (failed) attempt,
-        # remove it before creating a real staging directory.
-        if staging_dir.is_symlink() or (staging_dir.exists() and staging_dir.is_dir()
-                                        and staging_dir.resolve() != staging_dir):
-            try:
-                staging_dir.unlink()
-            except (OSError, PermissionError):
-                # Some Windows junctions need rmdir
-                import subprocess as _sp
-                _sp.run(["cmd", "/c", "rmdir", str(staging_dir)], check=True)
-
-        staging_dir.mkdir(parents=True, exist_ok=True)
+        staging_dir = Path(tempfile.mkdtemp(prefix=f"{slug}-", dir=staging_root))
 
         # mtime-skip copy of source files only. Mirrors directory structure so
         # relative imports work identically.
@@ -1414,7 +1419,7 @@ class VideoCompose(BaseTool):
         # bypasses the cut-schema, the stock scene-type registry, and the
         # RENDERER_FAMILY_MAP. This is the "hand-stitched every time" path:
         # the agent writes a fresh composition (its own scenes, theme, motion)
-        # under remotion-composer/projects/<slug>/ and points this renderer at
+        # under projects/<slug>/ and points this renderer at
         # it. No reusable creative components; a new visual language per video.
         # Triggered by composition_mode="atelier" (or renderer_family="bespoke").
         remotion_atelier_requested = (

@@ -166,8 +166,10 @@ Bespoke compositions are **throwaway and project-local** — they never enter an
 
 #### Remotion atelier path
 - Author under `projects/<slug>/` (gitignored). The render tool auto-stages your `.tsx`/`.ts`
-  source into `remotion-composer/projects/<slug>/` via mtime-skip copy so webpack can resolve
-  `node_modules` — your source-of-truth stays under `projects/`.
+  source into an isolated directory in the sibling `.OpenMontage-runtime/remotion-composer/`
+  (or `OPENMONTAGE_RUNTIME_ROOT`) with a link to the pinned `node_modules`. The stage is
+  removed after rendering; your source of truth stays under `projects/`, and concurrent
+  renders do not mutate the verified checkout or delete each other's staging directories.
 - Scaffold with `python scripts/scaffold_atelier_project.py <slug>` — emits engine
   plumbing only (entry / Root / blank `Composition.tsx` / `art-direction.md` / props
   template / README). Zero creative content; the placeholder is a deliberately ugly black
