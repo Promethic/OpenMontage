@@ -140,6 +140,14 @@ class StageRecorder:
             if method not in {"GET", "HEAD", "PUT"} and host not in self.upload_hosts:
                 raise RuntimeError("Unregistered provider write endpoint")
             for header in list(headers):
+                if (
+                    self.gateway == "fal"
+                    and host in self.upload_hosts
+                    and header.lower() == "authorization"
+                    and not str(headers[header]).startswith("Key ")
+                ):
+                    # Short-lived CDN upload token issued by fal; never the account key.
+                    continue
                 if header.lower() in {
                     "authorization",
                     "x-api-key",
@@ -215,6 +223,14 @@ class StageRecorder:
                 and public_target(upload_host).endswith(".aliyuncs.com")
             ):
                 self.upload_hosts.add(urlsplit(upload_host).hostname)
+        if (
+            self.gateway == "fal"
+            and isinstance(payload, dict)
+            and isinstance(payload.get("base_url"), str)
+            and urlsplit(payload["base_url"]).scheme == "https"
+            and (urlsplit(payload["base_url"]).hostname or "").endswith(".fal.media")
+        ):
+            self.upload_hosts.add(urlsplit(payload["base_url"]).hostname)
         if stage is None:
             return
         event = {

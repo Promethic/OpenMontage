@@ -11,6 +11,7 @@ import os
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from tools.base_tool import (
     BaseTool,
@@ -82,7 +83,7 @@ class SyncLipsync(BaseTool):
     }
 
     resource_profile = ResourceProfile(cpu_cores=1, ram_mb=512, vram_mb=0, disk_mb=500, network_required=True)
-    side_effects = ["uploads inputs to fal storage", "writes lip-synced video to output_path"]
+    side_effects = ["uploads inputs to the fal CDN", "writes lip-synced video to output_path"]
     user_visible_verification = ["Watch the mouth against the speech track before approval"]
 
     def _get_api_key(self) -> str | None:
@@ -96,27 +97,39 @@ class SyncLipsync(BaseTool):
         return 120.0
 
     @staticmethod
-    def _upload(path_value: str, headers: dict[str, str], requests_module: Any) -> str:
+    def _cdn_token(headers: dict[str, str], requests_module: Any) -> tuple[str, str]:
+        response = requests_module.post(
+            "https://rest.alpha.fal.ai/storage/auth/token?storage_type=fal-cdn-v3",
+            headers=headers,
+            data=b"{}",
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        base_url = str(data["base_url"]).rstrip("/")
+        if urlsplit(base_url).scheme != "https" or not (urlsplit(base_url).hostname or "").endswith(".fal.media"):
+            raise ValueError("Unexpected fal CDN upload host")
+        return base_url, f"{data['token_type']} {data['token']}"
+
+    @staticmethod
+    def _upload(path_value: str, cdn: tuple[str, str], requests_module: Any) -> str:
         path = Path(path_value)
         content_type = CONTENT_TYPES.get(path.suffix.lower())
         if content_type is None or not path.is_file():
             raise ValueError(f"Unsupported or missing media input: {path.name}")
-        initiated = requests_module.post(
-            "https://rest.alpha.fal.ai/storage/upload/initiate",
-            headers=headers,
-            json={"content_type": content_type, "file_name": path.name},
-            timeout=30,
-        )
-        initiated.raise_for_status()
-        data = initiated.json()
-        uploaded = requests_module.put(
-            data["upload_url"],
-            headers={"Content-Type": content_type},
+        base_url, authorization = cdn
+        uploaded = requests_module.post(
+            f"{base_url}/files/upload",
+            headers={
+                "Authorization": authorization,
+                "Content-Type": content_type,
+                "X-Fal-File-Name": path.name,
+            },
             data=path.read_bytes(),
             timeout=120,
         )
         uploaded.raise_for_status()
-        return data["file_url"]
+        return uploaded.json()["access_url"]
 
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
         api_key = self._get_api_key()
@@ -129,10 +142,15 @@ class SyncLipsync(BaseTool):
         model = inputs.get("model", "lipsync-2")
         headers = {"Authorization": f"Key {api_key}", "Content-Type": "application/json"}
         try:
+            for key in ("video_path", "audio_path"):
+                path = Path(inputs[key])
+                if CONTENT_TYPES.get(path.suffix.lower()) is None or not path.is_file():
+                    raise ValueError(f"Unsupported or missing media input: {path.name}")
+            cdn = self._cdn_token(headers, requests)
             payload = {
                 "model": model,
-                "video_url": self._upload(inputs["video_path"], headers, requests),
-                "audio_url": self._upload(inputs["audio_path"], headers, requests),
+                "video_url": self._upload(inputs["video_path"], cdn, requests),
+                "audio_url": self._upload(inputs["audio_path"], cdn, requests),
                 "sync_mode": inputs.get("sync_mode", "cut_off"),
             }
             submitted = requests.post(
