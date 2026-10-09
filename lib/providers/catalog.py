@@ -27,7 +27,7 @@ GATEWAYS = {
     "xai": Gateway(("XAI_API_KEY",), ("api.x.ai",)),
     "heygen": Gateway(("HEYGEN_API_KEY",), ("api.heygen.com",)),
     "runway": Gateway(("RUNWAY_API_KEY", "RUNWAYML_API_SECRET"), ("api.dev.runwayml.com",)),
-    "higgsfield": Gateway(("HIGGSFIELD_API_KEY", "HIGGSFIELD_API_SECRET", "HIGGSFIELD_KEY"), ("platform.higgsfield.ai",)),
+    "higgsfield": Gateway(("HIGGSFIELD_API_KEY", "HIGGSFIELD_API_SECRET", "HIGGSFIELD_KEY"), ("api.higgsfield.ai",)),
     "dashscope": Gateway(("DASHSCOPE_API_KEY", "DASHSCOPE_REGION"), ("dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com")),
     "volcengine": Gateway(("VOLC_ACCESSKEY", "VOLC_SECRETKEY", "VOLCENGINE_ACCESS_KEY", "VOLCENGINE_SECRET_KEY", "JIMENG_ACCESS_KEY", "JIMENG_SECRET_KEY", "DOUBAO_SPEECH_API_KEY", "DOUBAO_SPEECH_VOICE_TYPE"), ("visual.volcengineapi.com", "openspeech.bytedance.com")),
     "kling": Gateway(("KLING_API_KEY", "KLING_API_BASE_URL", "KLING_API_REGION"), ("api.klingai.com", "api-singapore.klingai.com", "api-beijing.klingai.com", "api.klingai.com.cn")),

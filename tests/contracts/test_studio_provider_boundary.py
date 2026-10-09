@@ -122,6 +122,42 @@ def test_sdk_download_does_not_receive_provider_auth(monkeypatch):
     assert "Authorization" not in headers
 
 
+def test_higgsfield_upload_is_free_and_generation_is_one_durable_paid_stage(monkeypatch):
+    from lib.providers import worker
+
+    events = []
+    monkeypatch.setattr(worker, "public_target", lambda url: urlsplit(url).hostname)
+    monkeypatch.setattr(worker, "emit", lambda event, **kwargs: events.append((event, kwargs)))
+    recorder = StageRecorder("higgsfield")
+    allocation = recorder.before(
+        "POST", "https://api.higgsfield.ai/files/generate-upload-url",
+        {"Authorization": "Key test-id:test-secret"}, b'{"content_type":"image/png"}',
+    )
+    upload_headers = {"Authorization": "Key must-not-leave-api", "x-amz-tagging": "temporary"}
+    recorder.before("PUT", "https://storage.example.org/upload", upload_headers, b"png")
+    generation = recorder.before(
+        "POST", "https://api.higgsfield.ai/kling-video/v3.0/std/image-to-video",
+        {"Authorization": "Key test-id:test-secret"}, b'{"duration":8}',
+    )
+    sending = [event for event, _ in events if event["event"] == "sending"]
+    assert [event["billable"] for event in sending] == [False, False, True]
+    assert all(options == {"acknowledge": True} for _, options in events)
+    assert "Authorization" not in upload_headers
+    assert upload_headers["x-amz-tagging"] == "temporary"
+    recorder.after(generation, 200, json.dumps({
+        "request_id": "higgsfield-original-order",
+        "status_url": "https://api.higgsfield.ai/requests/higgsfield-original-order/status",
+    }).encode())
+    assert events[-1][0]["providerOrderId"] == "higgsfield-original-order"
+    assert events[-1][0]["status_url"].endswith("/status")
+    assert allocation != generation
+    with pytest.raises(RuntimeError, match="retry blocked"):
+        recorder.before(
+            "POST", "https://api.higgsfield.ai/kling-video/v3.0/std/image-to-video",
+            {}, b'{"duration":8}',
+        )
+
+
 def test_worker_requires_owned_invocation(monkeypatch):
     from io import StringIO
     from lib.providers import worker

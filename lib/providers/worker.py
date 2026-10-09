@@ -164,6 +164,12 @@ class StageRecorder:
             host in self.upload_hosts
             or method == "PUT"
             or host == "oauth2.googleapis.com"
+            or (
+                self.gateway == "higgsfield"
+                and host == "api.higgsfield.ai"
+                and method == "POST"
+                and urlsplit(str(url)).path == "/files/generate-upload-url"
+            )
             or urlsplit(str(url)).path.endswith("/files")
             or "/upload/" in urlsplit(str(url)).path
             or "/storage/" in urlsplit(str(url)).path
